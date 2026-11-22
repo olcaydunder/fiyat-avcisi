@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="uygulama_adi">Fiyat Avcısı</string>
+    <color name="lacivert">#0F2044</color>
+    <integer name="acilis_solma_suresi">300</integer>
+</resources>

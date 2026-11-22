@@ -1,0 +1,71 @@
+// Fiyat Avcısı Android uygulaması: web uygulamasını tam ekran açan ince bir kabuk (Trusted Web Activity).
+// Bildirimler Chrome üzerinden gelir; uygulamanın içeriği sunucudan yüklendiği için APK'yı güncellemek gerekmez.
+//
+// Derleme:  gradle assembleRelease -Palan=fiyat.1-2-3-4.sslip.io -PsurumKodu=1
+// İmza:     APK_ANAHTAR_DOSYASI, APK_ANAHTAR_PAROLASI ortam değişkenleri (yoksa deneme imzası kullanılır)
+
+plugins {
+    id 'com.android.application'
+}
+
+def alan = (project.findProperty('alan') ?: '').toString().trim()
+if (!(alan ==~ /[a-z0-9.-]+\.[a-z]+/)) {
+    throw new GradleException("Sunucu adresi verilmedi. Örnek: -Palan=fiyat.1-2-3-4.sslip.io")
+}
+def surumKodu = (project.findProperty('surumKodu') ?: '1').toString().toInteger()
+def anahtarDosyasi = System.getenv('APK_ANAHTAR_DOSYASI')
+
+android {
+    namespace 'tr.fiyatavcisi.twa'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'tr.fiyatavcisi.twa'
+        minSdk 23
+        targetSdk 35
+        versionCode surumKodu
+        versionName "1.0.${surumKodu}"
+
+        resValue 'string', 'alan', alan
+        resValue 'string', 'baslangic_adresi', "https://${alan}/?kaynak=apk"
+        resValue 'string', 'saglayici', 'tr.fiyatavcisi.twa.fileprovider'
+        // Uygulama ile site arasındaki bağ (sitenin karşılığı: /.well-known/assetlinks.json)
+        resValue 'string', 'asset_statements',
+            """
+            [{
+                \\"relation\\": [\\"delegate_permission/common.handle_all_urls\\"],
+                \\"target\\": {
+                    \\"namespace\\": \\"web\\",
+                    \\"site\\": \\"https://${alan}\\"
+                }
+            }]
+            """
+    }
+
+    signingConfigs {
+        yayin {
+            if (anahtarDosyasi) {
+                storeFile file(anahtarDosyasi)
+                storePassword System.getenv('APK_ANAHTAR_PAROLASI')
+                keyAlias System.getenv('APK_ANAHTAR_ADI') ?: 'fiyat'
+                keyPassword System.getenv('APK_ANAHTAR_PAROLASI')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig anahtarDosyasi ? signingConfigs.yayin : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}

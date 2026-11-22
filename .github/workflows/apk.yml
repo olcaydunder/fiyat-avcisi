@@ -1,0 +1,93 @@
+name: Android APK
+
+# android/alan.txt içine sunucu adresi yazılınca (ör. fiyat.1-2-3-4.sslip.io) APK derlenir ve
+# "apk" adlı sürüme yüklenir. İmza anahtarı deponun gizli değerlerinde durur:
+#   APK_ANAHTAR_B64      : .jks dosyasının base64 hâli
+#   APK_ANAHTAR_PAROLASI : anahtar deposu ve anahtar parolası
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/apk.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sunucu adresini oku
+        id: alan
+        run: |
+          ALAN="$(tr -d ' \r\n' < android/alan.txt 2>/dev/null || true)"
+          if ! echo "$ALAN" | grep -Eq '^[a-z0-9.-]+\.[a-z]+$'; then
+            echo "::notice::android/alan.txt içinde sunucu adresi yok; APK derlenmedi."
+            echo "var=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "alan=$ALAN" >> "$GITHUB_OUTPUT"
+          echo "var=1" >> "$GITHUB_OUTPUT"
+
+      - name: İmza anahtarını hazırla
+        if: steps.alan.outputs.var == '1'
+        env:
+          ANAHTAR: ${{ secrets.APK_ANAHTAR_B64 }}
+        run: |
+          if [ -z "$ANAHTAR" ]; then
+            echo "::error::APK_ANAHTAR_B64 gizli değeri tanımlı değil; imzasız APK yayınlanmaz."
+            exit 1
+          fi
+          echo "$ANAHTAR" | base64 -d > "$RUNNER_TEMP/anahtar.jks"
+
+      - uses: actions/setup-java@v4
+        if: steps.alan.outputs.var == '1'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.alan.outputs.var == '1'
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Derle
+        if: steps.alan.outputs.var == '1'
+        working-directory: android
+        env:
+          APK_ANAHTAR_DOSYASI: ${{ runner.temp }}/anahtar.jks
+          APK_ANAHTAR_PAROLASI: ${{ secrets.APK_ANAHTAR_PAROLASI }}
+          ALAN: ${{ steps.alan.outputs.alan }}
+        run: gradle --no-daemon assembleRelease -Palan="$ALAN" -PsurumKodu="${{ github.run_number }}"
+
+      - name: İmzayı doğrula
+        if: steps.alan.outputs.var == '1'
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          ARAC="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)/apksigner"
+          BEKLENEN="$(grep -E '^([0-9A-F]{2}:){31}[0-9A-F]{2}$' android/parmak-izi.txt | head -n1)"
+          GERCEK="$("$ARAC" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')"
+          echo "Beklenen: $BEKLENEN"
+          echo "Gerçek  : $GERCEK"
+          if [ "$BEKLENEN" != "$GERCEK" ]; then
+            echo "::error::APK imzası android/parmak-izi.txt ile uyuşmuyor; uygulama tam ekran açılmaz."
+            exit 1
+          fi
+          cp "$APK" fiyat-avcisi.apk
+
+      - name: Yayınla
+        if: steps.alan.outputs.var == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view apk >/dev/null 2>&1 || gh release create apk --title "Android uygulaması" --notes "Fiyat Avcısı Android uygulaması. En güncel APK her zaman bu sayfadadır."
+          gh release upload apk fiyat-avcisi.apk --clobber

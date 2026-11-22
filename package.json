@@ -1,0 +1,19 @@
+{
+  "name": "fiyat-avcisi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Türkiye'de en ucuz fiyatı bulan, takip eden ve indirimde bildirim gönderen kişisel uygulama",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "tani": "node araclar/tani.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
