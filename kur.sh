@@ -157,9 +157,23 @@ for _ in 1 2 3 4 5 6 7 8; do
   sleep 1
 done
 
+# ---------------------------------------------------------------- kaynak denemesi
+# Fiyat siteleri bu sunucuya yanıt veriyor mu? Sonuç en alttaki özete yazılır; kurulumu durdurmaz.
+say "Fiyat kaynakları bu sunucudan deneniyor (yarım dakika sürebilir)"
+AJAN="$(oku KULLANICI_AJANI)"
+if [ -n "$AJAN" ]; then export KULLANICI_AJANI="$AJAN"; fi
+yetkisiz() { if command -v runuser >/dev/null 2>&1; then runuser -u nobody -- "$@"; else "$@"; fi; }
+KAYNAK="çalışıyor"
+TANI="$(yetkisiz timeout 120 node "$DIZIN/araclar/tani.js" "iphone 15" 2>&1)" || KAYNAK="SORUNLU"
+printf '%s\n' "$TANI" | grep -E '^(✔|✖)' | sed 's/^/  /' || true
+
 printf '\n\033[1;32m================================================================\033[0m\n'
 printf '\033[1;32m  HAZIR! Fiyat Avcısı %s\033[0m\n' "$DURUM"
 printf '  Telefonda aç  : https://%s/#kod=%s\n' "$ALAN" "$KOD"
 printf '  Giriş kodu    : %s\n' "$KOD"
+printf '  Fiyat siteleri: %s\n' "$KAYNAK"
+if [ "$KAYNAK" != "çalışıyor" ]; then
+  printf '  (Fiyat siteleri bu sunucuya yanıt vermedi; yukarıdaki ✖ satırlarını da gönder.)\n'
+fi
 printf '  (İlk açılışta HTTPS sertifikasının alınması bir dakika sürebilir.)\n'
 printf '\033[1;32m================================================================\033[0m\n\n'
