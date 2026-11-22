@@ -73,7 +73,7 @@ if [ -z "$KOD" ]; then KOD="$(node -e "console.log(require('node:crypto').random
 
 ALAN="${FIYAT_ALAN:-$(oku ALAN)}"
 if [ -z "$ALAN" ]; then
-  IP="$(curl -4 -fsS --max-time 8 https://api.ipify.org || hostname -I | awk '{print $1}')"
+  IP="$(curl -4 -fsS --max-time 8 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
   [ -n "$IP" ] || dur "Sunucunun IP adresi bulunamadı."
   ALAN="fiyat.$(echo "$IP" | tr '.' '-').sslip.io"
 fi
