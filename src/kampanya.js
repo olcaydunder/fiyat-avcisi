@@ -85,10 +85,16 @@ export function kampanyaOzeti({ fiyat, slogan, kampanyalar, rozetFiyat }) {
   const notlar = [];
   const gorulen = new Set();
   const ekle = (metin, zorunluTur) => {
-    const duz = String(metin ?? '').replace(/\s+/g, ' ').trim();
-    if (!duz || gorulen.has(duz)) return;
-    gorulen.add(duz);
-    notlar.push({ tur: zorunluTur || tur(duz), metin: duz });
+    // Mağazaların metin sonuna koyduğu süs işaretleri ("Fırsatı~~~") atılır
+    const duz = String(metin ?? '').replace(/\s+/g, ' ').replace(/^[\s~*•·-]+|[\s~*•·]+$/g, '').trim();
+    if (!duz) return;
+    const anahtar = duz.toLocaleLowerCase('tr');
+    if (gorulen.has(anahtar)) return;
+    const turu = zorunluTur || tur(duz);
+    // Aynı taksit bilgisinin uzun yazılmış hali ("Peşin fiyatına 9 taksit" ve "Peşin Fiyatına 9 Taksit Fırsatı") bir kez gösterilir
+    if (turu === 'taksit' && notlar.some((n) => { const o = n.metin.toLocaleLowerCase('tr'); return n.tur === 'taksit' && (anahtar.startsWith(o) || o.startsWith(anahtar)); })) return;
+    gorulen.add(anahtar);
+    notlar.push({ tur: turu, metin: duz });
   };
   // Mağaza sloganlarından yalnızca somut bir şey söyleyenler not olur ("... fırsatları kaçırma" gibi reklam cümleleri atılır)
   if (slogan && ILGILI.test(slogan)) {

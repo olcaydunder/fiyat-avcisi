@@ -72,3 +72,26 @@ test('reklam cümleleri not olmaz, somut kampanyalar olur', () => {
   assert.deepEqual(not('Maximum ile 3.000 TL ve Üzeri Alışverişe 350 TL Pazaramapuan'), ['puan']);
   assert.deepEqual(not('Tüm ürünlerde %15 indirim'), ['genel']);
 });
+
+test('süs işaretleri atılır, aynı taksit bilgisi bir kez yazılır', () => {
+  const o = kampanyaOzeti({
+    fiyat: 32983,
+    slogan: 'Gülümseten fırsatlar başladı, hemen yakala',
+    kampanyalar: [
+      { type: 'Installment', text: 'Peşin fiyatına 9 taksit' },
+      { type: 'Installment', text: 'Peşin Fiyatına 9 Taksit Fırsatı~~~' },
+      { type: 'Installment', text: 'Peşin fiyatına 6 taksit' },
+    ],
+  });
+  assert.deepEqual(o.notlar, [
+    { tur: 'taksit', metin: 'Peşin fiyatına 9 taksit' },
+    { tur: 'taksit', metin: 'Peşin fiyatına 6 taksit' },
+  ]);
+  assert.equal(o.tahmini, null);
+});
+
+test('büyük küçük harf farkı aynı notu ikiye bölmez', () => {
+  const o = kampanyaOzeti({ fiyat: 1000, slogan: 'Sepette %10 İndirim', kampanyalar: ['sepette %10 indirim'] });
+  assert.equal(o.notlar.length, 1);
+  assert.equal(o.tahmini.fiyat, 900);
+});
