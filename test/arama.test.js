@@ -4,7 +4,7 @@ import { aramaServisi, uyumPuani, kategoriOzeti, anaSozcuklerTutar } from '../sr
 import { getiriciOlustur, KaynakHatasi } from '../src/getir.js';
 import { depoAc } from '../src/depo.js';
 import { sozcukler } from '../src/para.js';
-import { sahteAg, sahteSaat, aramaSayfasi, urunSayfasi, ROBOTS_AKAKCE, MARKET_YANITI, TEKLIFLER } from './yardimci.js';
+import { sahteAg, sahteSaat, aramaSayfasi, urunSayfasi, kategoriSayfasi, ROBOTS_AKAKCE, MARKET_YANITI, TEKLIFLER } from './yardimci.js';
 
 const AK = 'https://www.akakce.com';
 const MF = 'https://api.marketfiyati.org.tr';
@@ -56,10 +56,31 @@ test('kategoriOzeti: çok satıcılı ve üst sıradaki ürünlerin kategorisi �
     { kategori: 'cep-telefonu', uyum: 1, fiyat: 51000, fiyatSayisi: 10 },
     { kategori: null, uyum: 1, fiyat: 2039, fiyatSayisi: 1 },
   ];
-  const { kategoriler, onerilen } = kategoriOzeti(urunler, { 'cep-telefonu': 'Cep Telefonu' });
+  const { kategoriler, onerilen } = kategoriOzeti(urunler, { 'cep-telefonu': 'Cep Telefonu' }, ['iphone', '13']);
   assert.equal(onerilen, 'cep-telefonu');
-  assert.deepEqual(kategoriler.map((k) => [k.slug, k.ad, k.adet]), [['cep-telefonu', 'Cep Telefonu', 2], ['telefon-kilifi', 'Telefon kilifi', 3], ['diger', 'Diğer', 1]]);
+  assert.deepEqual(kategoriler[0], { slug: 'cep-telefonu', ad: 'Cep Telefonu', adet: 2 });
+  assert.deepEqual(kategoriler.map((k) => [k.slug, k.adet]).sort(), [['cep-telefonu', 2], ['diger', 1], ['telefon-kilifi', 3]]);
+  assert.equal(kategoriler.find((k) => k.slug === 'telefon-kilifi').ad, 'Telefon kilifi');
   assert.equal(kategoriOzeti([], {}).onerilen, null);
+});
+
+test('kategoriOzeti: yan ürün kategorisi kalabalık olsa da asıl ürün önerilir; kullanıcı yan ürünü aradıysa o önerilir', () => {
+  // "dyson v15 detect": ilk sırada 64 satıcılı süpürge, ardından onlarca yedek parça (gerçek sayfadaki durum)
+  const urunler = [{ kategori: 'dikey-supurge', uyum: 1, fiyat: 30799.97, fiyatSayisi: 64 }];
+  for (let i = 0; i < 24; i++) urunler.push({ kategori: 'supurge-yedek-parca', uyum: 1, fiyat: 700 + i, fiyatSayisi: i === 0 ? 30 : 5 });
+  urunler.push({ kategori: 'dikey-supurge', uyum: 1, fiyat: 33000, fiyatSayisi: 12 });
+  assert.equal(kategoriOzeti(urunler, {}, ['dyson', 'v', '15', 'detect']).onerilen, 'dikey-supurge');
+  assert.equal(kategoriOzeti(urunler, {}, ['dyson', 'v', '15', 'yedek', 'parca']).onerilen, 'supurge-yedek-parca');
+
+  const kilif = [{ kategori: 'cep-telefonu', uyum: 0.67, fiyat: 49899, fiyatSayisi: 29 }, { kategori: 'telefon-kilifi', uyum: 1, fiyat: 99, fiyatSayisi: 3 }, { kategori: 'telefon-kilifi', uyum: 1, fiyat: 120, fiyatSayisi: 2 }];
+  assert.equal(kategoriOzeti(kilif, {}, ['iphone', '13', 'kilif']).onerilen, 'telefon-kilifi');
+});
+
+test('kategoriOzeti: sorguya tam uyan ürün yoksa kategori önerilmez', () => {
+  const urunler = [{ kategori: 'cocuk-kitaplari', uyum: 0.5, fiyat: 209.7, fiyatSayisi: 12 }, { kategori: 'fidan', uyum: 0.5, fiyat: 566.62, fiyatSayisi: 1 }];
+  const { kategoriler, onerilen } = kategoriOzeti(urunler, {}, ['xqzvk', 'bulunmaz']);
+  assert.equal(onerilen, null);
+  assert.equal(kategoriler.length, 2);
 });
 
 test('ara: Akakçe ürünleri uyum puanıyla, market ürünleri süzülerek döner', async () => {
@@ -146,4 +167,24 @@ test('urun: taze istek önbelleği atlar', async () => {
   assert.equal(ag.cagrilar.filter((c) => c.adres.endsWith('1377791125.html')).length, 1);
   await servis.urun(yol, { taze: true });
   assert.equal(ag.cagrilar.filter((c) => c.adres.endsWith('1377791125.html')).length, 2);
+});
+
+test('ara: Akakçe kategori sayfasına yönlendirirse oradaki ürünler okunur', async () => {
+  const { servis } = kur({ [`${AK}/arama/?q=%C3%A7ama%C5%9F%C4%B1r+makinesi+9+kg`]: { metin: kategoriSayfasi(), adres: `${AK}/camasir-makinesi/9-kg.html` } });
+  const s = await servis.ara('çamaşır makinesi 9 kg');
+  assert.equal(s.kaynaklar.akakce.yontem, 'astro');
+  assert.deepEqual(s.urunler.map((u) => [u.kod, u.fiyat, u.kategori, u.uyum]), [['1144641132', 27676.8, 'camasir-makinesi', 1], ['1148261927', 24199, 'camasir-makinesi', 1]]);
+  assert.equal(s.toplam, 214);
+  assert.equal(s.onerilenKategori, 'camasir-makinesi');
+  assert.deepEqual(s.kategoriler, [{ slug: 'camasir-makinesi', ad: 'Çamaşır Makinesi', adet: 2 }]);
+});
+
+test('ara: Akakçe doğrudan ürün sayfasına yönlendirirse o ürün tek sonuç olur', async () => {
+  const yol = '/cep-telefonu/en-ucuz-iphone-13-128-gb-yildiz-isigi-fiyati,1377791125.html';
+  const { servis } = kur({ [`${AK}/arama/?q=iphone+13+128+gb+y%C4%B1ld%C4%B1z+%C4%B1%C5%9F%C4%B1%C4%9F%C4%B1`]: { metin: urunSayfasi(), adres: AK + yol } });
+  const s = await servis.ara('iphone 13 128 gb yıldız ışığı');
+  assert.equal(s.urunler.length, 1);
+  assert.deepEqual(s.urunler[0], { kaynak: 'akakce', kod: '1377791125', ad: 'iPhone 13 128 GB Yıldız Işığı', marka: 'Apple', fiyat: 51091.54, ikinciElFiyat: 26999, rozet: null, fiyatSayisi: 10, dusus: null,
+    gorsel: 'https://cdn.akakce.com/z/apple/iphone-13-128-gb-yildiz-isigi.jpg', yol, kategori: 'cep-telefonu', sira: 0, uyum: 1 });
+  assert.deepEqual(s.kategoriler, [{ slug: 'cep-telefonu', ad: 'Cep Telefonu', adet: 1 }]);
 });

@@ -57,12 +57,25 @@ function kategoriAdi(slug, adlar) {
   return s ? s[0].toLocaleUpperCase('tr') + s.slice(1) : 'Diğer';
 }
 
+// Asıl ürünün yanında çıkan yan ürün kategorileri (kılıf, yedek parça, şarj aleti...)
+const YAN_URUN = new Set(['yedek', 'parca', 'aksesuar', 'aksesuarlari', 'kilif', 'kilifi', 'kapak', 'kapagi', 'koruyucu', 'kablo', 'kablosu', 'sarj', 'adaptor', 'adaptoru',
+  'filtre', 'filtresi', 'torba', 'torbasi', 'batarya', 'pil', 'stand', 'standi', 'tutucu', 'kordon', 'kayis', 'canta', 'cantasi', 'kagidi', 'baslik', 'basligi', 'kartus', 'toner', 'kumanda', 'aparat', 'aparati']);
+
+/** Kategori bir yan ürün kategorisi mi? Kullanıcı o sözcüğü kendisi yazdıysa ("iphone 13 kılıf") sayılmaz. */
+function yanUrunKategorisi(slug, sorguSozcukleri) {
+  const parcalar = String(slug).split('-');
+  if (!parcalar.some((p) => YAN_URUN.has(p))) return false;
+  return !sorguSozcukleri.some((q) => parcalar.some((p) => p === q || ekliHali(q, p)));
+}
+
 /**
  * Ürünleri kategorilere ayırır ve aramayla en ilgili kategoriyi seçer.
- * Üst sıralarda çıkan ve çok satıcısı olan ürünlerin kategorisi ağır basar;
- * böylece "iphone 13" aramasında kılıflar değil telefonlar öne gelir.
+ * Üst sıralarda çıkan ve çok satıcısı olan ürünlerin kategorisi ağır basar; yan ürün kategorileri
+ * (kılıf, yedek parça...) geri planda tutulur. Böylece "iphone 13" aramasında kılıflar değil telefonlar,
+ * "dyson v15" aramasında yedek parçalar değil süpürge öne gelir.
+ * Sorguya tam uyan ürün yoksa kategori önerilmez.
  */
-export function kategoriOzeti(urunler, adlar = {}) {
+export function kategoriOzeti(urunler, adlar = {}, sorguSozcukleri = []) {
   const kume = new Map();
   const tamUyanVar = urunler.some((u) => u.uyum >= 0.999);
   urunler.forEach((u, sira) => {
@@ -70,9 +83,9 @@ export function kategoriOzeti(urunler, adlar = {}) {
     let k = kume.get(slug);
     if (!k) { k = { slug, ad: slug === 'diger' ? 'Diğer' : kategoriAdi(slug, adlar), adet: 0, agirlik: 0 }; kume.set(slug, k); }
     k.adet++;
-    const ilgili = tamUyanVar ? u.uyum >= 0.999 : u.uyum >= 0.5;
-    if (ilgili && u.fiyat !== null) {
-      k.agirlik += (1 / (1 + sira * 0.15)) * (1 + Math.log2(1 + (u.fiyatSayisi || 1)));
+    if (tamUyanVar && u.uyum >= 0.999 && u.fiyat !== null) {
+      const carpan = yanUrunKategorisi(slug, sorguSozcukleri) ? 0.2 : 1;
+      k.agirlik += carpan * (1 / (1 + sira * 0.15)) * (1 + Math.log2(1 + (u.fiyatSayisi || 1)));
     }
   });
   const kategoriler = [...kume.values()].sort((a, b) => b.agirlik - a.agirlik || b.adet - a.adet);
@@ -90,9 +103,14 @@ export function aramaServisi({ getirici, depo, gunluk = () => {} }) {
 
   async function akakceAra(q, sayfa) {
     const bas = Date.now();
-    const { metin } = await getirici.getir(akakce.aramaAdresi(q, sayfa), { onbellekSn: ARAMA_ONBELLEK_SN });
-    const sonuc = akakce.aramaAyikla(metin);
-    if (!sonuc.yontem && !/astro-island|id="APL"/.test(metin)) {
+    const { metin, adres } = await getirici.getir(akakce.aramaAdresi(q, sayfa), { onbellekSn: ARAMA_ONBELLEK_SN });
+    // Akakçe aramayı bazen bir kategori sayfasına, tam eşleşmede doğrudan ürün sayfasına yönlendirir
+    let varilanYol = null;
+    try { varilanYol = new URL(adres).pathname; } catch { /* adres yoksa arama sayfası say */ }
+    let sonuc = null;
+    if (varilanYol && akakce.urunYoluGecerli(varilanYol)) sonuc = akakce.urunSayfasindanArama(metin, varilanYol);
+    if (!sonuc) sonuc = akakce.aramaAyikla(metin);
+    if (!sonuc.yontem && !/astro-island|id="(?:APL|CPL)"/.test(metin)) {
       throw new KaynakHatasi('bicim', 'Akakçe arama sayfası beklenen biçimde gelmedi');
     }
     return { ...sonuc, sureMs: Date.now() - bas };
@@ -170,7 +188,7 @@ export function aramaServisi({ getirici, depo, gunluk = () => {} }) {
       }
     }
 
-    const { kategoriler, onerilen } = kategoriOzeti(urunler, adlar);
+    const { kategoriler, onerilen } = kategoriOzeti(urunler, adlar, soz);
     if (a.status === 'fulfilled' && s === 1 && (urunler.length || marketUrunleri.length)) aramayiHatirla(q);
 
     return {

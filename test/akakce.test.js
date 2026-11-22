@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { aramaAdresi, aramaAyikla, urunAdresi, urunAyikla, urunYoluGecerli } from '../src/kaynaklar/akakce.js';
-import { aramaSayfasi, bosAramaSayfasi, urunSayfasi } from './yardimci.js';
+import { aramaSayfasi, bosAramaSayfasi, urunSayfasi, kategoriSayfasi } from './yardimci.js';
 
 test('adresler', () => {
   assert.equal(aramaAdresi('iphone 13'), 'https://www.akakce.com/arama/?q=iphone+13');
@@ -22,7 +22,9 @@ test('arama: gömülü veriden ürünleri okur', () => {
   assert.equal(s.yontem, 'astro');
   assert.equal(s.toplam, 500);
   assert.equal(s.urunler.length, 7);
-  assert.deepEqual(s.kategoriAdlari, { 'cep-telefonu': 'Cep Telefonu', 'sarj-aleti': 'Şarj Aleti', 'telefon-kilifi': 'Telefon Kılıfı' });
+  assert.equal(s.kategoriAdlari['cep-telefonu'], 'Cep Telefonu');
+  assert.equal(s.kategoriAdlari['sarj-aleti'], 'Şarj Aleti');
+  assert.equal(s.kategoriAdlari['telefon-kilifi'], 'Telefon Kılıfı');
   const [a, , , d, ikinci, tek, sarj] = s.urunler;
   assert.deepEqual(a, { kaynak: 'akakce', kod: '1101115595', ad: 'iPhone 13 128 GB', marka: 'Apple', fiyat: 49899, ikinciElFiyat: null, rozet: null, fiyatSayisi: 29, dusus: null, gorsel: 'https://cdn.akakce.com/x/apple/iphone-13.jpg', yol: '/cep-telefonu/en-ucuz-iphone-13-fiyati,1101115595.html', kategori: 'cep-telefonu' });
   assert.equal(d.fiyat, 49132.36);
@@ -142,4 +144,31 @@ test('ürün: okunamayan sayfa boş sonuç verir, bozuk yönlendirme linke dön�
   assert.equal(kotu.teklifler[0].link, null);
   assert.equal(kotu.teklifler[0].kargo, null);
   assert.equal(kotu.teklifler[1].link, 'https://www.akakce.com/r/?pr=1377791125&vd=6&pg=5'); // kimliklerden yeniden kurulur
+});
+
+test('kategori sayfası: ürünler başka iskelette de bulunur, fiyatlar kuruşa yuvarlanır', () => {
+  const s = aramaAyikla(kategoriSayfasi());
+  assert.equal(s.yontem, 'astro');
+  assert.equal(s.toplam, 214);
+  assert.deepEqual(s.urunler.map((u) => [u.kod, u.ad.slice(0, 16), u.fiyat, u.fiyatSayisi, u.kategori]), [
+    ['1144641132', 'Bosch WGA242X3TR', 27676.8, 60, 'camasir-makinesi'], ['1148261927', 'Profilo CGA242X3', 24199, 35, 'camasir-makinesi'],
+  ]);
+  assert.equal(s.kategoriAdlari['camasir-makinesi'], 'Çamaşır Makinesi');
+  assert.equal(s.kategoriAdlari['beyaz-esya'], 'Beyaz Eşya');
+});
+
+test('kategori sayfası: gömülü veri yoksa yalnızca ana listedeki ürünler HTML\'den okunur', () => {
+  const s = aramaAyikla(kategoriSayfasi({ astro: false }));
+  assert.equal(s.yontem, 'html');
+  assert.deepEqual(s.urunler.map((u) => [u.kod, u.fiyat, u.fiyatSayisi, u.marka]), [['1144641132', 27676.8, 60, 'Bosch']]);
+  assert.equal(s.urunler[0].gorsel, 'https://cdn.akakce.com/x/bosch/bosch-wga242x3tr-9-kg-1200-devir.jpg');
+  assert.equal(s.kategoriAdlari['camasir-makinesi'], 'Çamaşır Makinesi');
+});
+
+test('ürün: kaynaktaki küsuratlı fiyatlar kuruşa yuvarlanır', () => {
+  const s = urunAyikla(urunSayfasi({ ld: false, teklifler: [{ pgCode: 1, vdCode: 2, price: 6949.004, vdName: 'Trendyol', shipPrice: 44.994, badgePrice: 6500.006 }] }));
+  assert.equal(s.teklifler[0].fiyat, 6949);
+  assert.equal(s.teklifler[0].kargo, 44.99);
+  assert.equal(s.teklifler[0].toplam, 6993.99);
+  assert.equal(s.teklifler[0].rozetFiyat, 6500.01);
 });

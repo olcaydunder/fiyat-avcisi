@@ -127,3 +127,14 @@ test('günlük istek sınırı aşılınca durur', async () => {
   saat.ilerlet(24 * 3600_000);
   assert.equal((await g.getir('https://c.example/3')).metin, 'ok');
 });
+
+test('yönlendirme olduysa varılan adres bildirilir, başka siteye yönlendirme reddedilir', async () => {
+  const { g } = kur({
+    [`${KOK}/arama/?q=a`]: { metin: 'K', adres: `${KOK}/camasir-makinesi/9-kg.html` },
+    [`${KOK}/arama/?q=b`]: 'B',
+    [`${KOK}/arama/?q=c`]: { metin: 'X', adres: 'https://kotu.example/' },
+  });
+  assert.equal((await g.getir(`${KOK}/arama/?q=a`)).adres, `${KOK}/camasir-makinesi/9-kg.html`);
+  assert.equal((await g.getir(`${KOK}/arama/?q=b`)).adres, `${KOK}/arama/?q=b`);
+  await assert.rejects(g.getir(`${KOK}/arama/?q=c`), (e) => e.tur === 'bicim');
+});

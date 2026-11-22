@@ -50,8 +50,8 @@ function aramaUrunu(p) {
   const kod = p.code !== undefined && p.code !== null ? String(p.code) : null;
   if (!ad || !kod) return null;
   const yol = urunYoluGecerli(p.url) ? p.url : null;
-  const fiyat = sayi(p.price) > 0 ? p.price : null;
-  const ikinciEl = sayi(p.minOfNonNewPrice) > 0 ? p.minOfNonNewPrice : null;
+  const fiyat = sayi(p.price) > 0 ? yuvarla(p.price) : null;
+  const ikinciEl = sayi(p.minOfNonNewPrice) > 0 ? yuvarla(p.minOfNonNewPrice) : null;
   if (fiyat === null && ikinciEl === null) return null;
   return {
     kaynak: KIMLIK,
@@ -69,8 +69,11 @@ function aramaUrunu(p) {
   };
 }
 
-function aramaHtml(html) {
+function aramaHtml(tumHtml) {
   const urunler = [];
+  // Ana liste aramada APL, kategori sayfasında CPL kimliğini taşır; varsa yalnızca onun içine bak
+  const anaListe = /<ul\b[^>]*\bid="(?:APL|CPL)"[^>]*>([\s\S]*?)<\/ul>/.exec(tumHtml);
+  const html = anaListe ? anaListe[1] : tumHtml;
   const desen = /<li\b([^>]*\bdata-pr="(\d+)"[^>]*)>([\s\S]*?)<\/li>/g;
   let m;
   while ((m = desen.exec(html))) {
@@ -105,30 +108,105 @@ function aramaHtml(html) {
   return urunler;
 }
 
+/** Veri ağacında ürün dizisini bulur: { code, name, price | minOfNonNewPrice } nesnelerinden oluşan en uzun dizi. */
+function urunDizisiBul(veri) {
+  let enIyi = null;
+  const gez = (o, derinlik) => {
+    if (derinlik > 9 || o === null || typeof o !== 'object') return;
+    if (Array.isArray(o)) {
+      const ilk = o[0];
+      if (ilk && typeof ilk === 'object' && !Array.isArray(ilk) && 'code' in ilk && 'name' in ilk && ('price' in ilk || 'minOfNonNewPrice' in ilk)) {
+        if (!enIyi || o.length > enIyi.length) enIyi = o;
+        return;
+      }
+      for (const x of o.slice(0, 60)) gez(x, derinlik + 1);
+      return;
+    }
+    for (const k of Object.keys(o)) gez(o[k], derinlik + 1);
+  };
+  gez(veri, 0);
+  return enIyi;
+}
+
+/** Ağaçta adı verilen ilk alanı bulur (türü uyuyorsa). */
+function alanBul(veri, ad, tur, derinlik = 0) {
+  if (derinlik > 6 || veri === null || typeof veri !== 'object') return undefined;
+  if (!Array.isArray(veri) && typeof veri[ad] === tur) return veri[ad];
+  for (const k of Array.isArray(veri) ? veri.slice(0, 20) : Object.values(veri)) {
+    const bulunan = alanBul(k, ad, tur, derinlik + 1);
+    if (bulunan !== undefined) return bulunan;
+  }
+  return undefined;
+}
+
+/** Kategori adlarını toplar: { 'cep-telefonu': 'Cep Telefonu' }. Kaynaklar: gömülü veri ve sayfadaki kategori bağlantıları. */
+function kategoriAdlariTopla(veri, html) {
+  const adlar = {};
+  const gez = (o, derinlik) => {
+    if (derinlik > 7 || o === null || typeof o !== 'object') return;
+    if (Array.isArray(o)) { for (const x of o.slice(0, 80)) gez(x, derinlik + 1); return; }
+    const slug = typeof o.ctNameUrlForm === 'string' ? o.ctNameUrlForm : (typeof o.urlForm === 'string' ? o.urlForm : null);
+    const ad = temiz(o.ctName) || temiz(o.categoryName) || (o.type === 'c' ? temiz(o.name) : '');
+    if (slug && ad && /^[a-z0-9-]+$/.test(slug) && !adlar[slug]) adlar[slug] = ad;
+    for (const k of Object.keys(o)) gez(o[k], derinlik + 1);
+  };
+  if (veri) gez(veri, 0);
+  // Gezinti izindeki kategori bağlantıları: <a href="/camasir-makinesi.html">Çamaşır Makinesi</a>
+  const desen = /<a\b[^>]*\bhref="(?:https:\/\/www\.akakce\.com)?\/([a-z0-9-]+)\.html"[^>]*>([^<]{2,60})<\/a>/g;
+  let m;
+  let adet = 0;
+  while ((m = desen.exec(html || '')) && adet < 400) {
+    adet++;
+    if (!adlar[m[1]]) adlar[m[1]] = temiz(varlikCoz(m[2]));
+  }
+  return adlar;
+}
+
 /**
- * Arama sayfasını okur.
+ * Arama sayfasını okur. Akakçe bazı aramaları kategori sayfasına yönlendirir; ikisi de okunur.
  * { urunler, toplam, oneri, kategoriAdlari: { slug: ad }, yontem: 'astro' | 'html' | null }
  */
 export function aramaAyikla(html) {
-  const ada = adalar(html).find((a) => a.veri && a.veri.searchData && typeof a.veri.searchData === 'object');
-  if (ada) {
-    const sd = ada.veri.searchData;
-    const liste = sd.productList && Array.isArray(sd.productList.products) ? sd.productList.products : [];
-    const kategoriAdlari = {};
-    for (const k of Array.isArray(sd.relatedCategories) ? sd.relatedCategories : []) {
-      if (k && k.ctNameUrlForm && k.ctName) kategoriAdlari[k.ctNameUrlForm] = temiz(k.ctName);
-    }
+  const ada = adalar(html);
+  for (const a of ada) {
+    const liste = urunDizisiBul(a.veri);
+    if (!liste) continue;
     const urunler = liste.map(aramaUrunu).filter(Boolean);
+    const toplam = alanBul(a.veri, 'countOfProducts', 'number');
+    const ustVeri = alanBul(a.veri, 'metadata', 'object');
     return {
       urunler,
-      toplam: sd.productList && Number.isFinite(sd.productList.countOfProducts) ? sd.productList.countOfProducts : urunler.length,
-      oneri: sd.metadata && temiz(sd.metadata.correction) ? temiz(sd.metadata.correction) : null,
-      kategoriAdlari,
+      toplam: Number.isFinite(toplam) ? Math.max(toplam, urunler.length) : urunler.length,
+      oneri: ustVeri && temiz(ustVeri.correction) ? temiz(ustVeri.correction) : null,
+      kategoriAdlari: kategoriAdlariTopla(a.veri, html),
       yontem: 'astro',
     };
   }
-  const urunler = aramaHtml(html);
-  return { urunler, toplam: urunler.length, oneri: null, kategoriAdlari: {}, yontem: urunler.length ? 'html' : null };
+  // Sonuçsuz arama: arama bileşeni var ama ürün listesi yok
+  if (ada.some((a) => a.veri && a.veri.searchData && typeof a.veri.searchData === 'object')) {
+    return { urunler: [], toplam: 0, oneri: null, kategoriAdlari: {}, yontem: 'astro' };
+  }
+  const urunler = aramaHtml(html || '');
+  return { urunler, toplam: urunler.length, oneri: null, kategoriAdlari: urunler.length ? kategoriAdlariTopla(null, html) : {}, yontem: urunler.length ? 'html' : null };
+}
+
+/** Arama doğrudan bir ürün sayfasına yönlendiyse, o sayfayı tek sonuçlu arama gibi sunar. */
+export function urunSayfasindanArama(html, yol) {
+  const s = urunAyikla(html);
+  if (!s.urun.ad) return null;
+  const urunYolu = s.urun.yol || (urunYoluGecerli(yol) ? yol : null);
+  const enUcuz = s.teklifler[0] || null;
+  const ikinciEl = s.ikinciEl[0] || null;
+  if (!enUcuz && !ikinciEl) return null;
+  const kategori = s.urun.kategoriSlug || (urunYolu ? urunYolu.split('/')[1] : null);
+  return {
+    urunler: [{
+      kaynak: KIMLIK, kod: s.urun.kod || kodCikar(urunYolu) || '', ad: s.urun.ad, marka: s.urun.marka,
+      fiyat: enUcuz ? enUcuz.toplam : null, ikinciElFiyat: ikinciEl ? ikinciEl.toplam : null, rozet: enUcuz ? null : 'İkinci el',
+      fiyatSayisi: s.toplamTeklif || null, dusus: null, gorsel: s.urun.gorsel, yol: urunYolu, kategori,
+    }],
+    toplam: 1, oneri: null, kategoriAdlari: kategori && s.urun.kategori ? { [kategori]: s.urun.kategori } : {}, yontem: s.yontem || 'html',
+  };
 }
 
 // ---------------------------------------------------------------- ürün sayfası
@@ -147,9 +225,9 @@ function yonlendirme(o, urunKodu) {
 
 function teklifCevir(o, urunKodu) {
   if (!o || typeof o !== 'object') return null;
-  const fiyat = sayi(o.price);
+  const fiyat = yuvarla(sayi(o.price));
   if (!(fiyat > 0)) return null;
-  const kargo = Number.isFinite(o.shipPrice) ? Math.max(0, o.shipPrice) : null;
+  const kargo = Number.isFinite(o.shipPrice) ? yuvarla(Math.max(0, o.shipPrice)) : null;
   const magaza = temiz(o.vdName) || 'Mağaza';
   const satici = temiz(o.pgNick);
   return {
@@ -164,7 +242,7 @@ function teklifCevir(o, urunKodu) {
     slogan: temiz(o.sloganText) || null,
     kampanyalar: Array.isArray(o.campaigns) ? o.campaigns.filter((k) => k && typeof k.text === 'string').map((k) => ({ type: String(k.type ?? ''), text: temiz(k.text) })) : [],
     rozet: temiz(o.badge) || null,
-    rozetFiyat: sayi(o.badgePrice) > 0 ? o.badgePrice : null,
+    rozetFiyat: sayi(o.badgePrice) > 0 ? yuvarla(o.badgePrice) : null,
     guncelleme: typeof o.lastUpdateTime === 'string' ? o.lastUpdateTime : null,
     puan: Number.isFinite(o.vdRating) ? o.vdRating : null,
     link: yonlendirme(o, urunKodu),
@@ -190,7 +268,7 @@ function ldTeklifleri(ld) {
   const liste = kume && Array.isArray(kume.offers) ? kume.offers : (kume && kume['@type'] === 'Offer' ? [kume] : []);
   const sonuc = [];
   for (const o of liste) {
-    const fiyat = fiyatLd(o && o.price);
+    const fiyat = yuvarla(fiyatLd(o && o.price));
     if (!(fiyat > 0)) continue;
     if (o.itemCondition && !/NewCondition/i.test(String(o.itemCondition))) continue;
     const { magaza, satici } = saticiAyir(o.seller && o.seller.name);
@@ -317,7 +395,7 @@ export function urunAyikla(html) {
     kategoriSlug: (meta && temiz(meta.ctNameUrlForm)) || null,
     gorsel: gorselDuzelt(meta && meta.imgUrl) || gorselDuzelt(ld && Array.isArray(ld.image) && ld.image[0] && (ld.image[0].contentUrl || ld.image[0])) || null,
     yol: meta && urunYoluGecerli(meta.prUrl) ? meta.prUrl : null,
-    enDusuk1Ay: meta && sayi(meta.lowestPrice1M) > 0 ? meta.lowestPrice1M : null,
+    enDusuk1Ay: meta && sayi(meta.lowestPrice1M) > 0 ? yuvarla(meta.lowestPrice1M) : null,
     enDusuk1AyTarih: meta && typeof meta.lowestPriceDate1M === 'string' ? meta.lowestPriceDate1M.slice(0, 10) : null,
   };
 

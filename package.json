@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/*.test.js",
-    "tani": "node araclar/tani.js"
+    "tani": "node araclar/tani.js",
+    "deneme": "node araclar/deneme.js"
   },
   "engines": {
     "node": ">=20"

@@ -45,6 +45,30 @@ export function aramaSayfasi({ urunler = ARAMA_URUNLERI, astro = true, oneri = n
   return `<!DOCTYPE html><html lang="tr"> <head><meta charset="utf-8"><title>iPhone 13 Fiyatları | En Ucuzu Akakçe</title><meta name="robots" content="noindex, max-image-preview:large"></head><body><h1>iPhone 13</h1>${astro ? ada('SearchWrapper', 'search/SearchWrapper.BNksb1I6.js', veri) : ''}<div class="rw_v8 search_v8">${ARAMA_LISTE_HTML}</div>${astro ? '</astro-island>' : ''}<p class="pager_v9"><span class="a">1</span><a title="Sayfa 2" href="/arama/?q=iphone 13&amp;p=2">2</a></p></body></html>`;
 }
 
+/**
+ * Kategori sayfası: Akakçe "çamaşır makinesi 9 kg" gibi aramaları buraya yönlendirir.
+ * Ürünler başka bir iskelette (initialData.components[].data[].products) ve CPL kimlikli listede durur.
+ */
+export function kategoriSayfasi({ astro = true } = {}) {
+  const urunler = [
+    { code: 1144641132, mkName: 'Bosch', name: 'Bosch WGA242X3TR 9 kg 1200 Devir Çamaşır Makinesi', price: 27676.8, imageUrl: 'https://cdn.akakce.com/x/bosch/bosch-wga242x3tr-9-kg-1200-devir.jpg', countOfPrices: 60, url: '/camasir-makinesi/en-ucuz-bosch-wga242x3tr-9-kg-1200-devir-fiyati,1144641132.html', hasGraph: true, followCount: 100, hasSpotCampaign: false, descriptiveText: '9 kg' },
+    { code: 1148261927, mkName: 'Profilo', name: 'Profilo CGA242X3TR 1200 Devir 9 kg Çamaşır Makinesi', price: 24199.004, imageUrl: 'https://cdn.akakce.com/x/profilo/profilo-cga242x3tr.jpg', countOfPrices: 35, url: '/camasir-makinesi/en-ucuz-profilo-cga242x3tr-1200-devir-9-kg-fiyati,1148261927.html', hasGraph: true },
+  ];
+  const veri = {
+    initialData: {
+      components: [
+        { type: 'quickFilters', data: [{ topFilters: [{ name: '9 kg', id: 34267 }] }] },
+        { type: 'productList', data: [{ products: urunler }] },
+        { type: 'filters', data: [{ filterGroups: [] }] },
+      ],
+      categoryCode: 5034, categoryName: 'Çamaşır Makinesi', countOfProducts: 214, urlForm: 'camasir-makinesi', pageType: 'c',
+      metadata: { type: 'c', name: 'Çamaşır Makinesi', code: 5034, status: 200, ctNameUrlForm: 'camasir-makinesi', h1: '9 kg Çamaşır Makinesi' },
+    },
+  };
+  const liste = `<ul id="CPL" class="pl_v9 qv_v9"><li data-pr="1144641132" data-mk="Bosch" data-cp="60" data-g="1" data-fc="100"><span class="pw_v8"><figure><img loading="lazy" src="https://cdn.akakce.com/x/bosch/bosch-wga242x3tr-9-kg-1200-devir.jpg" onerror="this.src='data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';" alt="Bosch WGA242X3TR 9 kg 1200 Devir Çamaşır Makinesi"></figure><span class="w_v8"><a href="/camasir-makinesi/en-ucuz-bosch-wga242x3tr-9-kg-1200-devir-fiyati,1144641132.html" title="Bosch WGA242X3TR 9 kg 1200 Devir Çamaşır Makinesi" class="iC"><h3 class="pn_v8">Bosch WGA242X3TR 9 kg 1200 Devir Çamaşır Makinesi</h3></a> <span class="db_v9 no-badge">En Ucuz</span><span class="pb_v8"><span class="pt_v9"> 27.676<i>,80 TL </i><span>+59 FİYAT</span></span> <!-- --> </span> <!-- --> <span class="bt_v8"><b>Ürüne Git (+59)</b></span></span></span></li></ul><ul id="PL_22"><li data-pr="999" data-mk="Baska" data-cp="3"><h3 class="pn_v8">Başka listedeki ürün</h3><span class="pt_v9">1.000<i>,00 TL</i></span></li></ul>`;
+  return `<!DOCTYPE html><html lang="tr"><head><title>9 kg Çamaşır Makinesi Fiyatları | En Ucuzu Akakçe</title></head><body><ol id="BC_v8"><li><a href="https://www.akakce.com/beyaz-esya.html">Beyaz Eşya</a></li><li><a href="https://www.akakce.com/camasir-makinesi.html">Çamaşır Makinesi</a></li></ol><h1>9 kg Çamaşır Makinesi</h1>${astro ? ada('default', 'category/CategoryPageView.BE5-N-UH.js', veri) : ''}${liste}${astro ? '</astro-island>' : ''}</body></html>`;
+}
+
 /** Sonuçsuz arama: gömülü veride ürün listesi hiç yoktur. */
 export function bosAramaSayfasi() {
   const veri = { searchData: { metadata: { title: 'asdqwe', robots: 'noindex' } }, pageParams: { phrase: 'asdqwe', page: 1, sort: 1 } };
@@ -161,7 +185,7 @@ export function sahteAg(rotalar) {
     if (r instanceof Error) throw r;
     const durum = typeof r === 'string' ? 200 : (r.durum ?? 200);
     const metin = typeof r === 'string' ? r : (r.metin ?? '');
-    return { status: durum, url: String(adres), text: async () => metin };
+    return { status: durum, url: (typeof r === 'object' && r.adres) || String(adres), text: async () => metin };
   };
   return { fetchImpl, cagrilar };
 }

@@ -65,7 +65,7 @@ cd /opt/fiyat-avcisi && npm run tani -- "iphone 15"
 ```bash
 npm install
 npm test                  # birim ve uçtan uca testler (ağa çıkmaz)
-node araclar/deneme.js    # örnek verilerle yerel deneme: http://127.0.0.1:3199/#kod=123456
+npm run deneme            # örnek verilerle yerel deneme: http://127.0.0.1:3199/#kod=123456
 npm start                 # gerçek sunucu (yerelde giriş kodunu konsola yazar)
 ```
 
@@ -80,7 +80,9 @@ Klasörler:
 - `android/` — Android uygulaması (web uygulamasını tam ekran açan ince kabuk)
 - `test/` — testler; Akakçe sayfa yapısının örnekleri `test/yardimci.js` içinde
 
-Akakçe sayfa yapısını değiştirirse okuyucu sırayla üç yolu dener: sayfaya gömülü veri, JSON-LD, düz HTML. Üçü de boş dönerse Ayarlar > "Kaynakları dene" hangi adımın çalışmadığını gösterir.
+Akakçe sayfa yapısını değiştirirse okuyucu sırayla üç yolu dener: sayfaya gömülü veri, JSON-LD, düz HTML. Arama bir kategori sayfasına ya da doğrudan ürün sayfasına yönlenirse o sayfa okunur. Hiçbiri sonuç vermezse Ayarlar > "Kaynakları dene" hangi adımın çalışmadığını gösterir.
+
+Okuyucular 22.11.2026'da gerçek Akakçe sayfalarıyla (8 arama, 5 ürün sayfası) karşılaştırıldı; üç okuma yolu aynı en ucuz teklifi verdi.
 
 ## Android APK
 

@@ -102,7 +102,7 @@ export function getiriciOlustur({
         throw new KaynakHatasi('bicim', `${u.host} başka bir siteye yönlendirdi`);
       }
     } catch (e) { if (e instanceof KaynakHatasi) throw e; }
-    return { durum: yanit.status, metin };
+    return { durum: yanit.status, metin, adres: yanit.url || adres };
   }
 
   function engelle(host, durum) {
@@ -162,7 +162,7 @@ export function getiriciOlustur({
   }
 
   /**
-   * Bir adresi getirir. { durum, metin, onbellekten }
+   * Bir adresi getirir. { durum, metin, adres, onbellekten }
    * secenek: { yontem, govde (JSON olarak gönderilir), onbellekSn, robots (varsayılan true), zamanAsimiMs }
    */
   async function getir(adres, secenek = {}) {
@@ -186,7 +186,7 @@ export function getiriciOlustur({
       if (robots && !(await robotsSerbest(adres))) {
         throw new KaynakHatasi('robots', `${u.host} bu sayfaya otomatik erişime izin vermiyor`);
       }
-      const { durum, metin } = await sirayaAl(u.host, () => {
+      const { durum, metin, adres: sonAdres } = await sirayaAl(u.host, () => {
         if (h.engelBitis > simdi()) throw new KaynakHatasi('engel', `${u.host} geçici olarak geri çevirdi`);
         return hamIstek(adres, secenek);
       });
@@ -200,7 +200,7 @@ export function getiriciOlustur({
       }
       h.ardArda = 0;
       h.sonBasari = simdi();
-      const deger = { durum, metin };
+      const deger = { durum, metin, adres: sonAdres }; // adres: yönlendirme olduysa varılan sayfa
       if (onbellekSn > 0) {
         for (const [k, kayit] of onbellek) if (kayit.bitis <= simdi()) onbellek.delete(k); // süresi dolanları at
         while (onbellek.size >= ONBELLEK_AZAMI) onbellek.delete(onbellek.keys().next().value);

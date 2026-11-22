@@ -47,3 +47,28 @@ test('kampanyaOzeti notları ayıklar ve en iyi tahmini seçer', () => {
   const kart = kampanyaOzeti({ fiyat: 1000, rozetFiyat: 950 });
   assert.deepEqual(kart.tahmini, { fiyat: 950, not: 'Kart kampanyası', kosullu: true });
 });
+
+test('gerçek sayfalarda görülen kampanya metinleri (22.11.2026)', () => {
+  // Turkcell Pasaj: indirim kodu
+  assert.deepEqual(indirimHesapla('Pasaj500 Koduyla İlk Alışverişe Özel 500 TL İndirim', 30999), { fiyat: 30499, kosullu: true });
+  // Kart koşullu sepet indirimi
+  assert.deepEqual(indirimHesapla('Visa ile Sepette %10 indirim 30 Kasım son~~~', 3599), { fiyat: 3239.1, kosullu: true });
+  // Ödeme yöntemine bağlı indirim
+  assert.deepEqual(indirimHesapla('Tüm Havale ile Ödeme Siparişlerinizde %5 İndirim', 2000), { fiyat: 1900, kosullu: true });
+  // Fiyatı değiştirmeyenler
+  for (const metin of ['2.000 TL ve üzeri alışverişlerinizde ücretsiz teslimat', 'Peşinatsız kredi kartsız taksitli alışveriş.', "Kasım gibi Kasım'da fırsatlar n11'de", 'Gülümseten fırsatlar başladı, hemen yakala', "Beymen'den Türkiye'nin 81 İline Teslimat"]) {
+    assert.equal(indirimHesapla(metin, 5000), null, metin);
+  }
+});
+
+test('reklam cümleleri not olmaz, somut kampanyalar olur', () => {
+  const not = (slogan) => kampanyaOzeti({ fiyat: 5000, slogan }).notlar.map((n) => n.tur);
+  assert.deepEqual(not("Kasım gibi Kasım'da fırsatlar n11'de"), []);
+  assert.deepEqual(not('Gülümseten fırsatlar başladı, hemen yakala'), []);
+  assert.deepEqual(not("Hepsiburada'da Efsane Cuma İndirimlerini Kaçırma"), []);
+  assert.deepEqual(not('2.000 TL ve üzeri alışverişlerinizde ücretsiz teslimat'), ['kargo']);
+  assert.deepEqual(not('Tüm Havale ile Ödeme Siparişlerinizde %5 İndirim'), ['odeme']);
+  assert.deepEqual(not('Pasaj500 Koduyla İlk Alışverişe Özel 500 TL İndirim'), ['kupon']);
+  assert.deepEqual(not('Maximum ile 3.000 TL ve Üzeri Alışverişe 350 TL Pazaramapuan'), ['puan']);
+  assert.deepEqual(not('Tüm ürünlerde %15 indirim'), ['genel']);
+});

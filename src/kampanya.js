@@ -10,6 +10,7 @@ function tur(metin) {
   const m = metin.toLocaleLowerCase('tr');
   if (/sepette/.test(m)) return 'sepet';
   if (/kupon|indirim kodu|\bkod/.test(m)) return 'kupon';
+  if (/havale|\beft\b|nakit/.test(m) && /indirim/.test(m)) return 'odeme';
   if (/taksit/.test(m)) return 'taksit';
   if (/puan|bonus|club|chip-?para|worldpuan|maxipuan/.test(m)) return 'puan';
   if (/kargo|teslimat/.test(m)) return 'kargo';
@@ -25,6 +26,8 @@ export function indirimHesapla(metin, fiyat) {
   const m = metin.toLocaleLowerCase('tr').replace(/\s+/g, ' ');
   const t = tur(metin);
   if (t === 'puan' || t === 'taksit' || t === 'kargo' || t === 'genel') return null;
+  // Belirli bir kart, banka ya da üyelik isteyen indirimler koşullu sayılır
+  const kosulVar = /(visa|master|troy|\bkart|banka|bonus|world|maximum|axess|paraf|ilk alışveriş|üye|premium|prime|club)/.test(m);
 
   // "3.000 TL ve üzeri" gibi alt sınır varsa ve fiyat altında kalıyorsa indirim uygulanmaz
   const altSinir = m.match(new RegExp(`${TUTAR}\\s*tl\\s*(?:ve\\s*)?(?:üzeri|uzeri|üstü|ustu)`));
@@ -40,21 +43,30 @@ export function indirimHesapla(metin, fiyat) {
 
   if (t === 'sepet') {
     let e = kalan.match(/sepette[^%\d]{0,25}%\s*(\d{1,2})(?:[.,]\d+)?/) || kalan.match(/%\s*(\d{1,2})(?:[.,]\d+)?[^%\d]{0,25}sepette/);
-    if (e) return sonuc(fiyat * (1 - Number(e[1]) / 100), false);
+    if (e) return sonuc(fiyat * (1 - Number(e[1]) / 100), kosulVar);
     e = kalan.match(new RegExp(`sepette[^\\d%]{0,25}${TUTAR}\\s*tl[^\\d]{0,12}indirim`));
-    if (e) return sonuc(fiyat - fiyatOku(e[1]), false);
+    if (e) return sonuc(fiyat - fiyatOku(e[1]), kosulVar);
     // "Sepette 48.999 TL": sepetteki son fiyat. Küçük bir tutarsa ne olduğu belirsizdir, hesaba katılmaz.
     e = kalan.match(new RegExp(`sepette[^\\d%]{0,12}${TUTAR}\\s*tl`));
     if (e) {
       const tutar = fiyatOku(e[1]);
-      return tutar >= fiyat * 0.5 ? sonuc(tutar, false) : null;
+      return tutar >= fiyat * 0.5 ? sonuc(tutar, kosulVar) : null;
     }
     return null;
   }
 
-  // kupon
-  let e = kalan.match(/%\s*(\d{1,2})[^%\d]{0,20}kupon/) || kalan.match(/kupon[^%\d]{0,25}%\s*(\d{1,2})/);
+  if (t === 'odeme') {
+    // "Havale ile ödemede %5 indirim": yalnızca o ödeme yöntemiyle geçerli
+    const e = kalan.match(/%\s*(\d{1,2})(?:[.,]\d+)?[^%\d]{0,12}indirim/);
+    return e ? sonuc(fiyat * (1 - Number(e[1]) / 100), true) : null;
+  }
+
+  // kupon ya da indirim kodu
+  let e = kalan.match(/%\s*(\d{1,2})[^%\d]{0,20}kupon/) || kalan.match(/kupon[^%\d]{0,25}%\s*(\d{1,2})/) || kalan.match(/%\s*(\d{1,2})[^%\d]{0,12}indirim/);
   if (e) return sonuc(fiyat * (1 - Number(e[1]) / 100), true);
+  // "Pasaj500 koduyla ilk alışverişe özel 500 TL indirim"
+  e = kalan.match(new RegExp(`${TUTAR}\\s*tl[^\\d]{0,12}indirim`));
+  if (e) return sonuc(fiyat - fiyatOku(e[1]), true);
   e = kalan.match(new RegExp(`${TUTAR}\\s*tl[^\\d]{0,25}kupon`)) || kalan.match(new RegExp(`kupon[^\\d%]{0,25}${TUTAR}\\s*tl`));
   if (e) {
     // "150 TL kupon": indirim tutarı. "Kuponla 1.249 TL": kuponlu son fiyat.
@@ -78,7 +90,11 @@ export function kampanyaOzeti({ fiyat, slogan, kampanyalar, rozetFiyat }) {
     gorulen.add(duz);
     notlar.push({ tur: zorunluTur || tur(duz), metin: duz });
   };
-  if (slogan && ILGILI.test(slogan)) ekle(slogan);
+  // Mağaza sloganlarından yalnızca somut bir şey söyleyenler not olur ("... fırsatları kaçırma" gibi reklam cümleleri atılır)
+  if (slogan && ILGILI.test(slogan)) {
+    const sloganTuru = tur(slogan);
+    if (sloganTuru !== 'genel' || /%\s*\d|\d\s*tl\b/i.test(slogan)) ekle(slogan);
+  }
   for (const k of Array.isArray(kampanyalar) ? kampanyalar : []) {
     if (!k) continue;
     const metin = typeof k === 'string' ? k : k.text;

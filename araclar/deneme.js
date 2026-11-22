@@ -54,7 +54,8 @@ function urunSayfasi(yolu, indirim = 0) {
     t(2, 1.0119, 'Pazarama', 'ALTINKOZA TEKNOLOJİM', { deliveryText: '2 iş günü', sloganText: 'Maximum ile 3.000 TL ve Üzeri Alışverişe 350 TL Pazaramapuan', campaigns: [{ type: 'Installment', text: 'Peşin fiyatına 9 taksit' }] }),
     t(3, 1.0147, 'Trendyol', 'Berke Grup', { sloganText: "Aradığın ne varsa Trendyol'da", stock: null }),
     t(4, 1.0005, 'Trendyol', 'BURAKTECH', { shipPrice: 144.99, sloganText: "Aradığın ne varsa Trendyol'da" }),
-    t(5, 1.0511, 'Hepsiburada', 'BERKEGRUP', { sloganText: 'Sepette %5 indirim' }),
+    t(5, 1.0051, 'Turkcell', 'Turkcell Satış A.Ş.', { sloganText: 'Pasaj500 Koduyla İlk Alışverişe Özel 500 TL İndirim' }),
+    t(8, 1.0511, 'Hepsiburada', 'BERKEGRUP', { sloganText: "Hepsiburada'da Efsane Cuma İndirimlerini Kaçırma" }),
     t(6, 1.0765, 'Teknosa', null, { stock: 1 }),
     t(7, 1.1028, 'MediaMarkt', null, { sloganText: "Şahane Kasım'a Özel 2 Kat Club Puan" }),
   ] : [];
